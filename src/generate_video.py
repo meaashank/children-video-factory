@@ -232,15 +232,13 @@ def main() -> None:
             "-i", str(audio_path),
             "-vf", f"zoompan=z='min(zoom+0.0007,1.045)':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={WIDTH}x{HEIGHT}:fps={FPS},format=yuv420p",
             "-c:v", "libx264", "-preset", "ultrafast", "-crf", "25",
-            "-c:a", "aac", "-b:a", "96k", "-af", "apad",
+            "-c:a", "aac", "-b:a", "96k", "-af", "apad=pad_dur=0.8",
             "-shortest", "-movflags", "+faststart", str(clip_path),
         ])
         clips.append(clip_path)
 
     concat_file = WORK / "concat.txt"
     concat_file.write_text("".join(f"file '{p.resolve()}'\n" for p in clips), encoding="utf-8")
-    output_path = OUTPUT / "mil o-and-the-moonflower.mp4"
-    # Avoid spaces in the final artifact filename.
     output_path = OUTPUT / "childrens_story.mp4"
     run([
         "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
