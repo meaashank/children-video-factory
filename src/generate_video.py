@@ -1,254 +1,173 @@
 #!/usr/bin/env python3
-"""Generate a short illustrated children's story using Pillow, espeak-ng and FFmpeg."""
-
+"""Render a short, frame-animated storybook short with Pillow, espeak-ng and FFmpeg."""
 from __future__ import annotations
-
-import os
-import re
-import shutil
-import subprocess
+import math, os, re, shutil, subprocess
 from pathlib import Path
-
 from PIL import Image, ImageDraw, ImageFont
 
-ROOT = Path(__file__).resolve().parents[1]
-WORK = ROOT / "build"
-OUTPUT = ROOT / "output"
-WIDTH, HEIGHT = 720, 1280
-FPS = 24
-
-STORY = [
-    {
-        "narration": "At the edge of a quiet forest lived Milo, a little fox who collected things that glowed.",
-        "caption": "Milo loved all things that glowed.",
-        "sky": (35, 52, 93), "ground": (38, 83, 74), "moon": True,
-        "fox": (360, 770), "flower": (500, 820), "stars": True,
-    },
-    {
-        "narration": "One evening, Milo found a tiny blue flower hiding beneath a fern. Its petals shimmered like the stars.",
-        "caption": "A tiny blue flower shimmered.",
-        "sky": (39, 58, 105), "ground": (35, 91, 72), "moon": True,
-        "fox": (280, 790), "flower": (470, 830), "stars": True,
-    },
-    {
-        "narration": "The flower whispered, I can shine brighter when someone shares their light with a friend.",
-        "caption": "Sharing makes a little light grow.",
-        "sky": (45, 63, 110), "ground": (36, 93, 72), "moon": True,
-        "fox": (260, 790), "flower": (450, 820), "stars": True,
-    },
-    {
-        "narration": "Milo called his shy friend Pip the hedgehog. Together, they placed little glowing stones around the flower.",
-        "caption": "Milo invited his friend Pip.",
-        "sky": (47, 67, 116), "ground": (39, 98, 75), "moon": True,
-        "fox": (250, 790), "flower": (450, 820), "stars": True,
-    },
-    {
-        "narration": "With every kind act, the flower grew brighter, lighting the path for every animal in the forest.",
-        "caption": "Kindness lit the whole forest.",
-        "sky": (56, 76, 127), "ground": (44, 105, 78), "moon": True,
-        "fox": (300, 790), "flower": (450, 790), "stars": True,
-    },
-    {
-        "narration": "That night, Milo learned that the loveliest light is the one we help others find. And the forest glowed until morning.",
-        "caption": "The best light is shared.",
-        "sky": (73, 91, 140), "ground": (50, 112, 81), "moon": True,
-        "fox": (330, 790), "flower": (470, 800), "stars": True,
-    },
+ROOT=Path(__file__).resolve().parents[1]
+WORK=ROOT/"build"; OUTPUT=ROOT/"output"
+W,H,FPS=720,1280,24
+SCENES=[
+ {"voice":"In a quiet moonlit forest lived Milo, a curious little fox who loved finding tiny wonders.",
+  "caption":"Milo loved finding tiny wonders.","action":"intro","sky":(27,43,81)},
+ {"voice":"One night, a soft blue glow flickered beneath a fern. Milo padded closer to investigate.",
+  "caption":"A mysterious blue light!","action":"discover","sky":(30,48,91)},
+ {"voice":"There, he found a little flower glowing all by itself. Milo leaned in, amazed.",
+  "caption":"A flower that glowed!","action":"look","sky":(34,53,99)},
+ {"voice":"His shy friend Pip peeked from behind a tree. Milo waved and invited Pip to come closer.",
+  "caption":"Come and see, Pip!","action":"meet","sky":(38,58,105)},
+ {"voice":"Together, they placed bright little stones around the flower. Its gentle light spread across the forest.",
+  "caption":"Together, they made it shine.","action":"team","sky":(46,68,113)},
+ {"voice":"The friends smiled as the path lit up. Milo learned that kindness shines brightest when it is shared.",
+  "caption":"Kindness shines brighter when shared.","action":"ending","sky":(66,81,126)},
 ]
-
-
-def run(command: list[str]) -> None:
-    subprocess.run(command, check=True)
-
-
-def font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    candidates = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf" if bold else
-        "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
-    ]
-    for candidate in candidates:
-        if Path(candidate).exists():
-            return ImageFont.truetype(candidate, size)
-    return ImageFont.load_default()
-
-
-def wrap_text(draw: ImageDraw.ImageDraw, text: str, chosen_font, max_width: int) -> list[str]:
-    words = text.split()
-    lines: list[str] = []
-    current = ""
-    for word in words:
-        trial = f"{current} {word}".strip()
-        if draw.textbbox((0, 0), trial, font=chosen_font)[2] <= max_width:
-            current = trial
-        else:
-            if current:
-                lines.append(current)
-            current = word
-    if current:
-        lines.append(current)
-    return lines
-
-
-def draw_tree(draw: ImageDraw.ImageDraw, x: int, y: int, scale: float = 1.0) -> None:
-    trunk = int(26 * scale)
-    draw.rounded_rectangle((x - trunk // 2, y - 90 * scale, x + trunk // 2, y + 65 * scale),
-                           radius=8, fill=(92, 66, 53))
-    for dx, dy, r, color in [
-        (-35, -105, 55, (29, 79, 66)),
-        (25, -135, 62, (34, 94, 72)),
-        (0, -175, 52, (40, 105, 78)),
-    ]:
-        cx, cy, radius = int(x + dx * scale), int(y + dy * scale), int(r * scale)
-        draw.ellipse((cx-radius, cy-radius, cx+radius, cy+radius), fill=color)
-
-
-def draw_fox(draw: ImageDraw.ImageDraw, x: int, y: int) -> None:
-    # Tail
-    draw.ellipse((x-88, y+5, x-5, y+68), fill=(232, 126, 58))
-    draw.ellipse((x-86, y+24, x-52, y+61), fill=(255, 232, 202))
-    # Body and head
-    draw.ellipse((x-62, y-12, x+70, y+96), fill=(231, 123, 54))
-    draw.ellipse((x-38, y+38, x+48, y+88), fill=(255, 225, 188))
-    draw.ellipse((x-42, y-92, x+48, y+5), fill=(240, 143, 66))
-    # Ears
-    draw.polygon([(x-35,y-62),(x-42,y-119),(x-4,y-83)], fill=(240,143,66))
-    draw.polygon([(x+8,y-82),(x+42,y-120),(x+37,y-55)], fill=(240,143,66))
-    draw.polygon([(x-31,y-76),(x-34,y-105),(x-15,y-82)], fill=(91,53,47))
-    draw.polygon([(x+18,y-82),(x+35,y-105),(x+31,y-72)], fill=(91,53,47))
-    # Face, muzzle and eyes
-    draw.ellipse((x-24,y-55,x-14,y-43), fill=(35,35,43))
-    draw.ellipse((x+15,y-55,x+25,y-43), fill=(35,35,43))
-    draw.ellipse((x-12,y-31,x+22,y-9), fill=(255,231,201))
-    draw.ellipse((x+1,y-31,x+14,y-19), fill=(48,39,43))
-    # Feet
-    draw.ellipse((x-43,y+74,x-6,y+99), fill=(112,62,45))
-    draw.ellipse((x+25,y+74,x+59,y+99), fill=(112,62,45))
-
-
-def draw_flower(draw: ImageDraw.ImageDraw, x: int, y: int, glow: int = 1) -> None:
-    # A soft halo is built from translucent concentric circles.
-    halo = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
-    hd = ImageDraw.Draw(halo)
-    for radius, alpha in [(100, 12), (75, 18), (48, 24)]:
-        hd.ellipse((x-radius,y-radius,x+radius,y+radius), fill=(111, 196, 255, alpha * glow))
-    draw._image.alpha_composite(halo) if hasattr(draw, "_image") else None
-    draw.line((x, y+20, x, y+112), fill=(90, 203, 139), width=10)
-    draw.ellipse((x-48,y+58,x-4,y+83), fill=(70,177,113))
-    draw.ellipse((x+2,y+76,x+45,y+101), fill=(70,177,113))
-    for dx, dy in [(-28,-10),(0,-34),(28,-10),(-18,20),(18,20)]:
-        draw.ellipse((x+dx-19,y+dy-19,x+dx+19,y+dy+19), fill=(101,180,255))
-    draw.ellipse((x-19,y-19,x+19,y+19), fill=(255,226,131))
-
-
-def make_scene(scene: dict, index: int, title: str) -> Path:
-    image = Image.new("RGBA", (WIDTH, HEIGHT), scene["sky"] + (255,))
-    draw = ImageDraw.Draw(image, "RGBA")
-
-    # Stars
-    if scene["stars"]:
-        for x, y, r in [(90,140,4),(210,205,3),(570,155,4),(625,270,3),
-                        (120,340,3),(510,370,3),(335,115,3),(650,450,2)]:
-            draw.ellipse((x-r,y-r,x+r,y+r), fill=(255,248,211,220))
-    # Moon
-    draw.ellipse((500, 115, 610, 225), fill=(255, 231, 164))
-    draw.ellipse((530, 98, 620, 195), fill=scene["sky"])
-    # Distant hills
-    draw.ellipse((-150, 570, 430, 930), fill=(42, 88, 79))
-    draw.ellipse((280, 530, 900, 940), fill=(35, 77, 72))
-    # Forest floor
-    draw.rectangle((0, 850, WIDTH, HEIGHT), fill=scene["ground"])
-    # Trees frame the scene
-    draw_tree(draw, 75, 770, 1.0)
-    draw_tree(draw, 650, 780, 1.15)
-    draw_tree(draw, 155, 940, 0.72)
-    # Little glowing motes
-    for x, y in [(130,700),(565,670),(205,610),(590,920),(95,1030)]:
-        draw.ellipse((x-5,y-5,x+5,y+5), fill=(255,227,139,220))
-    # Flower glow must be composited on the image before drawing foreground.
-    x, y = scene["flower"]
-    glow = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
-    gd = ImageDraw.Draw(glow)
-    gd.ellipse((x-105,y-105,x+105,y+105), fill=(91,166,255,35))
-    gd.ellipse((x-65,y-65,x+65,y+65), fill=(91,166,255,30))
-    image = Image.alpha_composite(image, glow)
-    draw = ImageDraw.Draw(image, "RGBA")
-    draw_flower(draw, x, y)
-    fx, fy = scene["fox"]
-    draw_fox(draw, fx, fy)
-
-    # Title chip and scene number
-    draw.rounded_rectangle((42, 36, WIDTH-42, 112), radius=24, fill=(13,24,45,180))
-    title_font = font(25, True)
-    shown_title = title if len(title) <= 34 else title[:31].rstrip() + "..."
-    draw.text((WIDTH//2, 74), shown_title, font=title_font, fill=(255,248,224),
-              anchor="mm", stroke_width=0)
-    draw.text((WIDTH-48, 137), f"{index+1}/{len(STORY)}", font=font(20, True),
-              fill=(235,242,255), anchor="ra")
-
-    # Captions with a dark backing for readability.
-    caption_font = font(30, True)
-    lines = wrap_text(draw, scene["caption"], caption_font, WIDTH-112)
-    line_h = 42
-    box_h = len(lines) * line_h + 42
-    top = HEIGHT - box_h - 78
-    draw.rounded_rectangle((38, top, WIDTH-38, top+box_h), radius=24, fill=(12,20,35,220))
-    for i, line in enumerate(lines):
-        draw.text((WIDTH//2, top+22+i*line_h), line, font=caption_font,
-                  fill=(255,255,255), anchor="ma")
-    return save_image(image, WORK / f"scene_{index:02d}.png")
-
-
-def save_image(image: Image.Image, path: Path) -> Path:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    image.convert("RGB").save(path, quality=92)
-    return path
-
-
-def main() -> None:
-    for tool in ("ffmpeg", "espeak-ng"):
-        if shutil.which(tool) is None:
-            raise SystemExit(f"Required program not found: {tool}")
-
-    title = os.environ.get("STORY_TITLE", "Milo and the Moonflower").strip()
-    title = re.sub(r"[^\w\s'!?,.-]", "", title)[:70] or "Milo and the Moonflower"
-    shutil.rmtree(WORK, ignore_errors=True)
-    shutil.rmtree(OUTPUT, ignore_errors=True)
-    WORK.mkdir(parents=True, exist_ok=True)
-    OUTPUT.mkdir(parents=True, exist_ok=True)
-
-    clips: list[Path] = []
-    for index, scene in enumerate(STORY):
-        image_path = make_scene(scene, index, title)
-        audio_path = WORK / f"voice_{index:02d}.wav"
-        clip_path = WORK / f"clip_{index:02d}.mp4"
-        run(["espeak-ng", "-v", "en-us", "-s", "142", "-p", "57",
-             "-w", str(audio_path), scene["narration"]])
-        # A gentle zoom keeps the illustrations from feeling completely static.
-        run([
-            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-            "-loop", "1", "-framerate", str(FPS), "-i", str(image_path),
-            "-i", str(audio_path),
-            "-vf", f"zoompan=z='min(zoom+0.0007,1.045)':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={WIDTH}x{HEIGHT}:fps={FPS},format=yuv420p",
-            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "25",
-            "-c:a", "aac", "-b:a", "96k", "-af", "apad=pad_dur=0.8",
-            "-shortest", "-movflags", "+faststart", str(clip_path),
-        ])
-        clips.append(clip_path)
-
-    concat_file = WORK / "concat.txt"
-    concat_file.write_text("".join(f"file '{p.resolve()}'\n" for p in clips), encoding="utf-8")
-    output_path = OUTPUT / "childrens_story.mp4"
-    run([
-        "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-        "-f", "concat", "-safe", "0", "-i", str(concat_file),
-        "-c", "copy", "-movflags", "+faststart", str(output_path),
-    ])
-    run(["ffprobe", "-v", "error", "-show_entries", "format=duration,size",
-         "-of", "default=noprint_wrappers=1", str(output_path)])
-    print(f"Video ready: {output_path}")
-
-
-if __name__ == "__main__":
-    main()
+def font(size,bold=False):
+ p="/usr/share/fonts/truetype/dejavu/DejaVuSans"+("-Bold" if bold else "")+".ttf"
+ return ImageFont.truetype(p,size) if Path(p).exists() else ImageFont.load_default()
+def run(cmd): subprocess.run(cmd,check=True)
+def wrap(draw,text,f,maxw):
+ out=[]; cur=""
+ for word in text.split():
+  test=(cur+" "+word).strip()
+  if draw.textbbox((0,0),test,font=f)[2]<=maxw: cur=test
+  else:
+   if cur: out.append(cur)
+   cur=word
+ if cur: out.append(cur)
+ return out
+def background(scene, title, idx):
+ im=Image.new("RGB",(W,H),scene["sky"]); d=ImageDraw.Draw(im)
+ # stars and moon
+ for x,y,r in [(70,150,3),(185,230,4),(320,120,3),(570,180,4),(650,330,3),(455,275,2),(120,380,3)]:
+  d.ellipse((x-r,y-r,x+r,y+r),fill=(255,246,207))
+ d.ellipse((510,105,615,210),fill=(255,232,174))
+ d.ellipse((535,90,625,190),fill=scene["sky"])
+ # layered hills and floor
+ d.ellipse((-170,570,440,1030),fill=(34,78,72)); d.ellipse((250,560,900,1000),fill=(30,68,68))
+ d.rectangle((0,850,W,H),fill=(35,86,69))
+ # tree trunks and leafy crowns
+ for x,y,s in [(62,790,1.1),(660,780,1.15),(155,900,.7),(585,920,.75)]:
+  d.rectangle((int(x-12*s),int(y-120*s),int(x+12*s),int(y+70*s)),fill=(83,59,52))
+  for ox,oy,r,c in [(-25,-135,52,(25,77,64)),(24,-165,60,(31,91,69)),(0,-205,50,(38,101,74))]:
+   rr=int(r*s); cx=int(x+ox*s); cy=int(y+oy*s)
+   d.ellipse((cx-rr,cy-rr,cx+rr,cy+rr),fill=c)
+ # title
+ d.rounded_rectangle((34,32,W-34,105),radius=22,fill=(13,23,43))
+ shown=title if len(title)<32 else title[:29]+"..."
+ d.text((W//2,68),shown,font=font(24,True),fill=(255,247,222),anchor="mm")
+ d.text((W-42,128),f"{idx+1}/{len(SCENES)}",font=font(19,True),fill=(239,243,255),anchor="ra")
+ return im
+def fox(d,x,y,scale=1, wave=False):
+ # tail, body, belly, head, ears
+ d.ellipse((x-78*scale,y+12*scale,x+2*scale,y+65*scale),fill=(235,126,57))
+ d.ellipse((x-78*scale,y+26*scale,x-43*scale,y+58*scale),fill=(255,229,198))
+ d.ellipse((x-50*scale,y-4*scale,x+58*scale,y+83*scale),fill=(229,119,53))
+ d.ellipse((x-27*scale,y+34*scale,x+35*scale,y+74*scale),fill=(255,225,188))
+ d.ellipse((x-35*scale,y-78*scale,x+42*scale,y+5*scale),fill=(242,143,65))
+ d.polygon([(x-29*scale,y-48*scale),(x-38*scale,y-105*scale),(x-1*scale,y-72*scale)],fill=(242,143,65))
+ d.polygon([(x+8*scale,y-71*scale),(x+40*scale,y-105*scale),(x+35*scale,y-43*scale)],fill=(242,143,65))
+ d.polygon([(x-26*scale,y-64*scale),(x-30*scale,y-92*scale),(x-12*scale,y-68*scale)],fill=(105,54,48))
+ d.polygon([(x+15*scale,y-69*scale),(x+32*scale,y-92*scale),(x+29*scale,y-58*scale)],fill=(105,54,48))
+ d.ellipse((x-20*scale,y-48*scale,x-12*scale,y-38*scale),fill=(31,30,37))
+ d.ellipse((x+13*scale,y-48*scale,x+21*scale,y-38*scale),fill=(31,30,37))
+ d.ellipse((x-7*scale,y-28*scale,x+21*scale,y-8*scale),fill=(255,231,202))
+ d.ellipse((x+3*scale,y-27*scale,x+14*scale,y-17*scale),fill=(42,34,37))
+ d.ellipse((x-35*scale,y+67*scale,x-5*scale,y+91*scale),fill=(113,63,45))
+ d.ellipse((x+19*scale,y+67*scale,x+49*scale,y+91*scale),fill=(113,63,45))
+ if wave:
+  d.line((x+35*scale,y+18*scale,x+52*scale,y-8*scale),fill=(229,119,53),width=max(4,int(10*scale)))
+  d.ellipse((x+43*scale,y-19*scale,x+61*scale,y-1*scale),fill=(255,222,184))
+def hedgehog(d,x,y,scale=1):
+ # soft spines and body
+ for i in range(9):
+  px=x-42*scale+i*10*scale
+  d.polygon([(px,y+18*scale),(px-6*scale,y-14*scale),(px+10*scale,y+5*scale)],fill=(117,87,73))
+ d.ellipse((x-44*scale,y-2*scale,x+43*scale,y+47*scale),fill=(180,137,102))
+ d.ellipse((x+15*scale,y+8*scale,x+50*scale,y+35*scale),fill=(226,184,143))
+ d.ellipse((x+28*scale,y+17*scale,x+35*scale,y+24*scale),fill=(36,31,30))
+ d.ellipse((x-20*scale,y+10*scale,x-13*scale,y+17*scale),fill=(36,31,30))
+ d.ellipse((x-25*scale,y+39*scale,x-7*scale,y+52*scale),fill=(90,63,49))
+ d.ellipse((x+17*scale,y+39*scale,x+35*scale,y+52*scale),fill=(90,63,49))
+def flower(d,x,y,pulse=0):
+ r=int(46+6*math.sin(pulse))
+ # glow rings
+ for rr,col in [(r+45,(83,153,255,22)),(r+25,(83,153,255,35))]:
+  d.ellipse((x-rr,y-rr,x+rr,y+rr),fill=col)
+ d.line((x,y+24,x,y+115),fill=(83,192,126),width=9)
+ d.ellipse((x-42,y+57,x-2,y+81),fill=(66,163,103))
+ d.ellipse((x+1,y+75,x+39,y+98),fill=(66,163,103))
+ for dx,dy in [(-25,-6),(0,-31),(25,-6),(-16,19),(16,19)]:
+  d.ellipse((x+dx-18,y+dy-18,x+dx+18,y+dy+18),fill=(100,177,255))
+ d.ellipse((x-17,y-17,x+17,y+17),fill=(255,226,134))
+def make_frame(scene,idx,frame,title):
+ t=frame/FPS
+ im=background(scene,title,idx).convert("RGBA")
+ # Animated transparent light layer so glow can actually blend with background.
+ glow=Image.new("RGBA",(W,H),(0,0,0,0)); gd=ImageDraw.Draw(glow)
+ action=scene["action"]
+ fx=220+int(120*min(1,t/2)) if action in ("intro","discover","look") else 275
+ if action=="intro": fx=180+int(55*math.sin(t*2))
+ if action=="discover": fx=175+int(85*min(1,t/2))
+ if action=="look": fx=260+int(8*math.sin(t*3))
+ if action in ("meet","team","ending"): fx=245+int(8*math.sin(t*2))
+ fy=820+int(5*math.sin(t*4))
+ flower_x=500 if action in ("intro","discover","look") else 420
+ flower_y=845
+ # Flower light grows during team/ending.
+ strength=(0.5+0.5*math.sin(t*4)) if action in ("team","ending") else (0.25+0.15*math.sin(t*3))
+ radius=int(80+strength*75)
+ gd.ellipse((flower_x-radius,flower_y-radius,flower_x+radius,flower_y+radius),fill=(90,160,255,int(20+strength*28)))
+ im=Image.alpha_composite(im,glow)
+ d=ImageDraw.Draw(im)
+ # Milo walks in from the left in the opening and discovery shots.
+ fox(d,fx,fy,1.0,wave=action in ("meet","ending"))
+ flower(d,flower_x,flower_y,t*2)
+ # Pip appears and stays in the last three scenes; little bobbing motion.
+ if action in ("meet","team","ending"):
+  hx=560-int(18*min(1,t/1.2))
+  hedgehog(d,hx,875+int(4*math.sin(t*4)),0.92)
+ # Sparkles animate around the flower in the final two scenes.
+ if action in ("team","ending"):
+  for j in range(7):
+   a=t*1.4+j*math.tau/7
+   sx=flower_x+int((82+8*math.sin(t*3))*math.cos(a))
+   sy=flower_y+int((76+8*math.sin(t*3))*math.sin(a))
+   rr=3+(j%2)
+   d.ellipse((sx-rr,sy-rr,sx+rr,sy+rr),fill=(255,239,158))
+ # Captions remain in a stable lower safe area.
+ lines=wrap(d,scene["caption"],font(29,True),W-100)
+ lh=40; bh=len(lines)*lh+34; top=H-bh-68
+ d.rounded_rectangle((34,top,W-34,top+bh),radius=22,fill=(10,19,34,230))
+ for j,line in enumerate(lines):
+  d.text((W//2,top+17+j*lh),line,font=font(29,True),fill=(255,255,255),anchor="ma")
+ return im.convert("RGB")
+def main():
+ for tool in ("ffmpeg","ffprobe","espeak-ng"):
+  if not shutil.which(tool): raise SystemExit("Missing required program: "+tool)
+ title=re.sub(r"[^\w\s'!?,.-]","",os.environ.get("STORY_TITLE","Milo and the Moonflower").strip())[:60] or "Milo and the Moonflower"
+ shutil.rmtree(WORK,ignore_errors=True); shutil.rmtree(OUTPUT,ignore_errors=True)
+ WORK.mkdir(parents=True); OUTPUT.mkdir(parents=True)
+ clips=[]
+ for i,scene in enumerate(SCENES):
+  scene_dir=WORK/f"scene_{i:02d}"; scene_dir.mkdir()
+  audio=WORK/f"voice_{i:02d}.wav"; clip=WORK/f"clip_{i:02d}.mp4"
+  run(["espeak-ng","-v","en-us","-s","145","-p","56","-w",str(audio),scene["voice"]])
+  # A fixed 5.5-second scene gives each action time to read; audio is padded gently.
+  total_frames=int(5.5*FPS)
+  for n in range(total_frames):
+   make_frame(scene,i,n,title).save(scene_dir/f"frame_{n:04d}.png",compress_level=1)
+  run(["ffmpeg","-hide_banner","-loglevel","error","-y","-framerate",str(FPS),
+       "-i",str(scene_dir/"frame_%04d.png"),"-i",str(audio),
+       "-vf","format=yuv420p","-c:v","libx264","-preset","ultrafast","-crf","24",
+       "-c:a","aac","-b:a","96k","-af","apad=pad_dur=0.8","-t","5.5",
+       "-movflags","+faststart",str(clip)])
+  clips.append(clip)
+ concat=WORK/"concat.txt"
+ concat.write_text("".join(f"file '{p.resolve()}'\n" for p in clips),encoding="utf-8")
+ out=OUTPUT/"childrens_story.mp4"
+ run(["ffmpeg","-hide_banner","-loglevel","error","-y","-f","concat","-safe","0","-i",str(concat),
+      "-c","copy","-movflags","+faststart",str(out)])
+ run(["ffprobe","-v","error","-show_entries","format=duration,size","-of","default=noprint_wrappers=1",str(out)])
+ print(f"Rendered animated story: {out}")
+if __name__=="__main__": main()
