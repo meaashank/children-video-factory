@@ -13,7 +13,7 @@ permissions:
 jobs:
   render:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -26,9 +26,13 @@ jobs:
       - name: Install free audio/video tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg espeak-ng
+          sudo apt-get install -y ffmpeg
           ffmpeg -version
-          espeak-ng --version
+
+      - name: Install free neural TTS dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install "kokoro-onnx==0.5.0" soundfile
 
       - name: Install Remotion dependencies
         working-directory: remotion
@@ -42,14 +46,14 @@ jobs:
         working-directory: remotion
         run: npx remotion render src/index.ts DiwaliStory out/diwali-meera-story-silent.mp4 --codec=h264 --crf=22
 
-      - name: Generate narration and music
+      - name: Generate natural narration and music
         working-directory: remotion
         run: python3 scripts/generate_audio.py
 
       - name: Add audio and validate final MP4
         working-directory: remotion
         run: |
-          ffmpeg -y -i out/diwali-meera-story-silent.mp4 -i out/story-audio.m4a -map 0:v:0 -map 1:a:0 -c:v copy -c:a aac -b:a 128k -shortest -movflags +faststart out/diwali-meera-story.mp4
+          ffmpeg -y -i out/diwali-meera-story-silent.mp4 -i out/story-audio.m4a -map 0:v:0 -map 1:a:0 -c:v copy -c:a aac -b:a 160k -shortest -movflags +faststart out/diwali-meera-story.mp4
           test -s out/diwali-meera-story.mp4
           ffprobe -v error -show_entries format=duration,size -show_entries stream=codec_type,codec_name,width,height -of json out/diwali-meera-story.mp4 | tee out/validation.json
           python3 -c "import json; d=json.load(open('out/validation.json')); assert any(s.get('codec_type')=='video' for s in d['streams']); assert any(s.get('codec_type')=='audio' for s in d['streams']); assert float(d['format']['duration']) >= 59; assert int(d['format']['size']) > 100000; print('Validated: video + audio streams, duration >= 59 seconds, non-empty MP4')"
@@ -57,7 +61,7 @@ jobs:
       - name: Upload final MP4
         uses: actions/upload-artifact@v4
         with:
-          name: diwali-meera-story-with-audio
+          name: diwali-meera-story-natural-voice
           path: |
             remotion/out/diwali-meera-story.mp4
             remotion/out/validation.json
