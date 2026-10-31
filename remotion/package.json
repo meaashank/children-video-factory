@@ -1,0 +1,21 @@
+{
+  "name": "diwali-watercolor-short",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "remotion bundle src/index.ts",
+    "render": "remotion render src/index.ts DiwaliMarket out/diwali-watercolor-market.mp4"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.300",
+    "@remotion/renderer": "^4.0.300",
+    "@remotion/transitions": "^4.0.300",
+    "remotion": "^4.0.300",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "typescript": "^5.7.2"
+  }
+}
