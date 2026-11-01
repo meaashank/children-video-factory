@@ -1,0 +1,1 @@
+# Dialogue-driven short\n\nThe composition begins immediately with spoken dialogue. The video title is never shown or spoken in the video. Two original characters use distinct neural TTS voices; generated timing data drives the captions and active-speaker animation. Render with the **Render Dialogue Short** GitHub Actions workflow.\n
