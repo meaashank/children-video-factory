@@ -38,7 +38,12 @@ def smooth(obj):
 def uv(name, loc, scale, mat, parent=None):
     bpy.ops.mesh.primitive_uv_sphere_add(segments=32, ring_count=20, location=loc)
     o=bpy.context.object; o.name=name; o.scale=scale; o.data.materials.append(mat); smooth(o)
-    if parent: o.parent=parent; o.matrix_parent_inverse=parent.matrix_world.inverted()
+    if parent:
+        o.location.x -= parent.location.x
+        o.location.y -= parent.location.y
+        o.location.z -= parent.location.z
+        o.parent=parent
+        o.matrix_parent_inverse.identity()
     return o
 
 def cube(name, loc, scale, mat, bevel=0.08, parent=None):
@@ -49,13 +54,23 @@ def cube(name, loc, scale, mat, bevel=0.08, parent=None):
     if bevel:
         mod=o.modifiers.new("Soft rounded edges","BEVEL"); mod.width=bevel; mod.segments=4
         o.modifiers.new("Weighted corner normals","WEIGHTED_NORMAL")
-    if parent: o.parent=parent; o.matrix_parent_inverse=parent.matrix_world.inverted()
+    if parent:
+        o.location.x -= parent.location.x
+        o.location.y -= parent.location.y
+        o.location.z -= parent.location.z
+        o.parent=parent
+        o.matrix_parent_inverse.identity()
     return o
 
 def cyl(name, loc, radius, depth, mat, parent=None):
     bpy.ops.mesh.primitive_cylinder_add(vertices=32, radius=radius, depth=depth, location=loc)
     o=bpy.context.object; o.name=name; o.data.materials.append(mat); smooth(o)
-    if parent: o.parent=parent; o.matrix_parent_inverse=parent.matrix_world.inverted()
+    if parent:
+        o.location.x -= parent.location.x
+        o.location.y -= parent.location.y
+        o.location.z -= parent.location.z
+        o.parent=parent
+        o.matrix_parent_inverse.identity()
     return o
 
 # Environment
