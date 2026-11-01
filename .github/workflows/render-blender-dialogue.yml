@@ -1,0 +1,53 @@
+name: Blender Dialogue Preview
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "blender/scripts/create_dialogue_preview.py"
+      - ".github/workflows/render-blender-dialogue.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Blender and FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y blender ffmpeg
+          blender --version
+          ffmpeg -version
+      - name: Create output directory
+        run: mkdir -p out
+      - name: Generate and render 3D conversation preview
+        run: |
+          blender -b --python blender/scripts/create_dialogue_preview.py
+          test -s out/blender-dialogue-preview.mp4
+          test -s out/blender-dialogue-preview.blend
+      - name: Validate rendered MP4
+        run: |
+          ffprobe -v error -show_entries format=duration,size -show_entries stream=codec_type,codec_name,width,height -of json out/blender-dialogue-preview.mp4 | tee out/validation.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open("out/validation.json"))
+          video=next(s for s in data["streams"] if s["codec_type"]=="video")
+          assert (video["width"],video["height"]) == (720,1280), video
+          assert video["codec_name"] == "h264", video
+          assert float(data["format"]["duration"]) >= 4.8, data["format"]
+          assert int(data["format"]["size"]) > 50000, data["format"]
+          print("Blender preview validated:", data["format"]["duration"], "seconds")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: blender-dialogue-preview
+          path: |
+            out/blender-dialogue-preview.mp4
+            out/blender-dialogue-preview.blend
+            out/validation.json
+          if-no-files-found: error
+          retention-days: 7
