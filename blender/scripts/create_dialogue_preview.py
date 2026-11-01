@@ -1,4 +1,4 @@
-import bpy, math
+import bpy, math, os
 from mathutils import Vector
 
 # Short, title-free 3D conversation proof-of-pipeline.
@@ -131,7 +131,11 @@ scene.render.resolution_x=720; scene.render.resolution_y=1280; scene.render.reso
 scene.render.fps=24; scene.frame_start=1; scene.frame_end=120
 scene.render.image_settings.file_format="FFMPEG"
 scene.render.ffmpeg.format="MPEG4"; scene.render.ffmpeg.codec="H264"; scene.render.ffmpeg.constant_rate_factor="MEDIUM"
-scene.render.filepath="//out/blender-dialogue-preview.mp4"
+out_dir=os.path.abspath(os.path.join(os.getcwd(), "out"))
+os.makedirs(out_dir, exist_ok=True)
+blend_path=os.path.join(out_dir, "blender-dialogue-preview.blend")
+video_path=os.path.join(out_dir, "blender-dialogue-preview.mp4")
+scene.render.filepath=video_path
 scene.view_settings.view_transform="Standard"
 scene.view_settings.look="Medium High Contrast"
 scene.world.color=(0.025,0.025,0.025)
@@ -150,6 +154,6 @@ for frame, z in ((1,4.0),(120,3.92)):
 scene.render.image_settings.color_mode="RGB"
 scene.render.ffmpeg.audio_codec="NONE"
 scene.frame_set(1)
-bpy.ops.wm.save_as_mainfile(filepath="//out/blender-dialogue-preview.blend")
+bpy.ops.wm.save_as_mainfile(filepath=blend_path)
 bpy.ops.render.render(animation=True)
 print("BLENDER_DIALOGUE_PREVIEW_RENDERED")
