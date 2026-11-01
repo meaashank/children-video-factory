@@ -34,7 +34,7 @@ const Claude:React.FC<{frame:number;active:boolean}> = ({frame,active})=>{
   <circle cx="760" cy="760" r="18" fill="#ffc28c" opacity=".8"/>
  </g>
 };
-const Environment:React.FC<{frame:number}> = ({frame})=>{
+const Environment:React.FC<{frame:number;speaker:string}> = ({frame,speaker})=>{
  const drift=interpolate(frame,[0,2200],[0,-90],clamp);
  return <svg viewBox="0 0 1080 1920" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
   <defs>
@@ -59,8 +59,8 @@ const Environment:React.FC<{frame:number}> = ({frame})=>{
   <path d="M0 1220 Q540 1120 1080 1220 V1920 H0Z" fill="url(#floor)"/>
   <path d="M0 1280 Q540 1180 1080 1280" stroke="#39516b" strokeWidth="3" fill="none" opacity=".5"/>
   <g filter="url(#blur)"><ellipse cx="350" cy="1050" rx="190" ry="110" fill="#457fb1" opacity=".12"/><ellipse cx="800" cy="1050" rx="180" ry="120" fill="#e98238" opacity=".12"/></g>
-  <Human frame={frame} fps={30} active={false}/>
-  <Claude frame={frame} active={false}/>
+  <Human frame={frame} fps={30} active={speaker==="human"}/>
+  <Claude frame={frame} active={speaker==="claude"}/>
  </svg>
 };
 export const DialogueShort:React.FC=()=>{
@@ -72,7 +72,7 @@ export const DialogueShort:React.FC=()=>{
  const scale=interpolate(reveal,[0,1],[.97,1]);
  const push=speaker==="human"?interpolate(frame,[0,900,1800],[1,1.045,1],clamp):interpolate(frame,[0,900,1800],[1.04,1,1.04],clamp);
  return <AbsoluteFill style={{background:C.ink,fontFamily:"Arial,Helvetica,sans-serif"}}>
-  <AbsoluteFill style={{transform:`scale(${push})`}}><Environment frame={frame}/></AbsoluteFill>
+  <AbsoluteFill style={{transform:`scale(${push})`}}><Environment frame={frame} speaker={speaker}/></AbsoluteFill>
   <AbsoluteFill style={{background:"linear-gradient(180deg,rgba(3,7,13,.06) 48%,rgba(3,7,13,.65) 100%)"}}/>
   <div style={{position:"absolute",top:78,left:72,right:72,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
    <div style={{fontSize:23,letterSpacing:5,color:"#b8c6d7",fontWeight:700}}>HUMAN <span style={{color:"#65758a"}}> / </span> CLAUDE</div>
