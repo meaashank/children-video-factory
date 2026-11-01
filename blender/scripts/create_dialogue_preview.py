@@ -43,7 +43,8 @@ def uv(name, loc, scale, mat, parent=None):
         # This avoids Blender's implicit keep-transform parenting offset.
         o.parent=parent
         o.matrix_parent_inverse.identity()
-        o.location = Vector(loc) - parent.location
+        # All supplied character-part coordinates are already root-local.
+        o.location = Vector(loc)
     return o
 
 def cube(name, loc, scale, mat, bevel=0.08, parent=None):
@@ -59,7 +60,8 @@ def cube(name, loc, scale, mat, bevel=0.08, parent=None):
         # This avoids Blender's implicit keep-transform parenting offset.
         o.parent=parent
         o.matrix_parent_inverse.identity()
-        o.location = Vector(loc) - parent.location
+        # All supplied character-part coordinates are already root-local.
+        o.location = Vector(loc)
     return o
 
 def cyl(name, loc, radius, depth, mat, parent=None):
@@ -70,7 +72,8 @@ def cyl(name, loc, radius, depth, mat, parent=None):
         # This avoids Blender's implicit keep-transform parenting offset.
         o.parent=parent
         o.matrix_parent_inverse.identity()
-        o.location = Vector(loc) - parent.location
+        # All supplied character-part coordinates are already root-local.
+        o.location = Vector(loc)
     return o
 
 # Environment
