@@ -39,11 +39,11 @@ def uv(name, loc, scale, mat, parent=None):
     bpy.ops.mesh.primitive_uv_sphere_add(segments=32, ring_count=20, location=loc)
     o=bpy.context.object; o.name=name; o.scale=scale; o.data.materials.append(mat); smooth(o)
     if parent:
-        o.location.x -= parent.location.x
-        o.location.y -= parent.location.y
-        o.location.z -= parent.location.z
+        # Assign the parent first, then set explicit local coordinates.
+        # This avoids Blender's implicit keep-transform parenting offset.
         o.parent=parent
         o.matrix_parent_inverse.identity()
+        o.location = Vector(loc) - parent.location
     return o
 
 def cube(name, loc, scale, mat, bevel=0.08, parent=None):
@@ -55,22 +55,22 @@ def cube(name, loc, scale, mat, bevel=0.08, parent=None):
         mod=o.modifiers.new("Soft rounded edges","BEVEL"); mod.width=bevel; mod.segments=4
         o.modifiers.new("Weighted corner normals","WEIGHTED_NORMAL")
     if parent:
-        o.location.x -= parent.location.x
-        o.location.y -= parent.location.y
-        o.location.z -= parent.location.z
+        # Assign the parent first, then set explicit local coordinates.
+        # This avoids Blender's implicit keep-transform parenting offset.
         o.parent=parent
         o.matrix_parent_inverse.identity()
+        o.location = Vector(loc) - parent.location
     return o
 
 def cyl(name, loc, radius, depth, mat, parent=None):
     bpy.ops.mesh.primitive_cylinder_add(vertices=32, radius=radius, depth=depth, location=loc)
     o=bpy.context.object; o.name=name; o.data.materials.append(mat); smooth(o)
     if parent:
-        o.location.x -= parent.location.x
-        o.location.y -= parent.location.y
-        o.location.z -= parent.location.z
+        # Assign the parent first, then set explicit local coordinates.
+        # This avoids Blender's implicit keep-transform parenting offset.
         o.parent=parent
         o.matrix_parent_inverse.identity()
+        o.location = Vector(loc) - parent.location
     return o
 
 # Environment
@@ -125,10 +125,10 @@ for x in (-0.32,0.32):
     cyl("Claude foot",(x,-0.05,0.32),0.18,0.5,orange,claude)
 
 # Camera and lighting
-bpy.ops.object.camera_add(location=(0,-11,4.0))
+bpy.ops.object.camera_add(location=(0,-13,4.0))
 cam=bpy.context.object; cam.name="Conversation Camera"
 target=Vector((0,0,1.95)); cam.rotation_euler=(target-cam.location).to_track_quat("-Z","Y").to_euler()
-cam.data.type="ORTHO"; cam.data.ortho_scale=8.6
+cam.data.type="ORTHO"; cam.data.ortho_scale=10.2
 bpy.context.scene.camera=cam
 
 def area(name, loc, power, color, size, target=(0,0,2)):
