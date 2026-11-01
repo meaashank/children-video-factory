@@ -178,3 +178,52 @@ for x in (-0.34,0.34):
     cube("Claude sneaker",(x,-0.18,0.48),(0.42,0.62,0.25),shirt,0.11,claude)
     cube("Sneaker sole",(x,-0.19,0.36),(0.44,0.64,0.07),navy,0.025,claude)
 
+
+# Camera and lighting
+bpy.ops.object.camera_add(location=(0,-13,4.0))
+cam=bpy.context.object; cam.name="Conversation Camera"
+target=Vector((0,0,1.95)); cam.rotation_euler=(target-cam.location).to_track_quat("-Z","Y").to_euler()
+cam.data.type="ORTHO"; cam.data.ortho_scale=10.2
+bpy.context.scene.camera=cam
+
+def area(name, loc, power, color, size, target=(0,0,2)):
+    bpy.ops.object.light_add(type="AREA", location=loc)
+    l=bpy.context.object; l.name=name; l.data.energy=power; l.data.color=color; l.data.shape="DISK"; l.data.size=size
+    l.rotation_euler=(Vector(target)-l.location).to_track_quat("-Z","Y").to_euler()
+area("Warm key",(-4,-5,7),950,(1.0,0.78,0.62),5)
+area("Cool fill",(4,-4,5),800,(0.55,0.72,1.0),4)
+area("Top rim",(0,2,6),1100,(1.0,0.48,0.22),3)
+
+scene=bpy.context.scene
+scene.render.engine="BLENDER_EEVEE_NEXT" if "BLENDER_EEVEE_NEXT" in bpy.types.RenderSettings.bl_rna.properties["engine"].enum_items.keys() else "BLENDER_EEVEE"
+scene.eevee.taa_render_samples=32 if hasattr(scene,"eevee") else 16
+scene.render.resolution_x=720; scene.render.resolution_y=1280; scene.render.resolution_percentage=100
+scene.render.fps=24; scene.frame_start=1; scene.frame_end=120
+scene.render.image_settings.file_format="FFMPEG"
+scene.render.ffmpeg.format="MPEG4"; scene.render.ffmpeg.codec="H264"; scene.render.ffmpeg.constant_rate_factor="MEDIUM"
+out_dir=os.path.abspath(os.path.join(os.getcwd(), "out"))
+os.makedirs(out_dir, exist_ok=True)
+blend_path=os.path.join(out_dir, "blender-dialogue-preview.blend")
+video_path=os.path.join(out_dir, "blender-dialogue-preview.mp4")
+scene.render.filepath=video_path
+scene.view_settings.view_transform="Standard"
+scene.view_settings.look="Medium High Contrast"
+scene.world.color=(0.025,0.025,0.025)
+
+# Gentle idle motion; no title card or on-screen title.
+for root, phase in ((human,0.0),(claude,1.2)):
+    for frame in (1,30,60,90,120):
+        root.location.z=0.035*math.sin(frame/12+phase)
+        root.rotation_euler[1]=0.025*math.sin(frame/18+phase)
+        root.keyframe_insert(data_path="location",frame=frame)
+        root.keyframe_insert(data_path="rotation_euler",frame=frame)
+
+# Slightly vary camera framing over the shot.
+for frame, z in ((1,4.0),(120,3.92)):
+    cam.location.z=z; cam.keyframe_insert(data_path="location",frame=frame)
+scene.render.image_settings.color_mode="RGB"
+scene.render.ffmpeg.audio_codec="NONE"
+scene.frame_set(1)
+bpy.ops.wm.save_as_mainfile(filepath=blend_path)
+bpy.ops.render.render(animation=True)
+print("BLENDER_DIALOGUE_PREVIEW_RENDERED")
