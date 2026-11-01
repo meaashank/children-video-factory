@@ -1,0 +1,70 @@
+name: Render Dialogue Short
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "remotion/src/DialogueShort.tsx"
+      - "remotion/scripts/generate_dialogue.py"
+      - ".github/workflows/render-dialogue.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+      - name: Install free neural TTS dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "kokoro-onnx==0.5.0" soundfile numpy
+      - name: Install Remotion dependencies
+        working-directory: remotion
+        run: npm install
+      - name: Generate distinct character dialogue audio and timing
+        working-directory: remotion
+        run: python scripts/generate_dialogue.py
+      - name: Install Chrome for Remotion
+        working-directory: remotion
+        run: npx remotion browser install chrome
+      - name: Render vertical conversation
+        working-directory: remotion
+        run: |
+          npx remotion render src/index.ts DialogueShort out/conversation-short.mp4 --codec=h264 --crf=19
+      - name: Validate MP4
+        working-directory: remotion
+        run: |
+          test -s out/conversation-short.mp4
+          ffprobe -v error -show_entries format=duration,size -show_entries stream=codec_type,codec_name,width,height -of json out/conversation-short.mp4 | tee out/validation.json
+          python - <<'PY'
+          import json
+          d=json.load(open("out/validation.json"))
+          v=next(s for s in d["streams"] if s["codec_type"]=="video")
+          a=next(s for s in d["streams"] if s["codec_type"]=="audio")
+          assert (v["width"],v["height"])==(1080,1920), v
+          assert a["codec_name"]=="aac", a
+          assert float(d["format"]["duration"])>=60, d["format"]
+          assert int(d["format"]["size"])>250000, d["format"]
+          print("MP4 validation passed:",d["format"]["duration"],"seconds")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: conversation-short
+          path: |
+            remotion/out/conversation-short.mp4
+            remotion/out/validation.json
+          if-no-files-found: error
+          retention-days: 7
