@@ -126,7 +126,8 @@ for i in range(7):
     a=math.tau*i/7
     leaf=uv("Plant leaf",(4.55+math.cos(a)*0.34,0.12,3.82+math.sin(a)*0.10),(0.13,0.10,0.42),panel)
     leaf.rotation_euler[1]=math.cos(a)*0.55
-\n# Desk and small monitor in the background
+
+# Desk and small monitor in the background
 cube("Desk top",(0,-0.25,1.0),(5.8,1.2,0.16),navy,0.08)
 cube("Monitor",(-0.05,0.45,2.15),(1.5,0.14,0.95),dark,0.09)
 cube("Monitor screen",(-0.05,0.36,2.16),(1.34,0.035,0.78),panel,0.025)
